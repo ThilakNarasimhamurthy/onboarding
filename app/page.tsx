@@ -7,6 +7,34 @@ import Step1Auth from '@/components/wizard/Step1Auth';
 import Step2Dynamic from '@/components/wizard/Step2Dynamic';
 import Step3Dynamic from '@/components/wizard/Step3Dynamic';
 
+// Utility function to safely handle API responses
+const safeApiCall = async (url: string, options?: RequestInit) => {
+  try {
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      console.error(`API call failed: ${response.status} ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const text = await response.text();
+    if (!text) {
+      console.error(`Empty response from ${url}`);
+      throw new Error('Empty response from server');
+    }
+    
+    try {
+      return JSON.parse(text);
+    } catch (parseError) {
+      console.error(`JSON parse error for ${url}:`, parseError, 'Response:', text);
+      throw new Error('Invalid JSON response from server');
+    }
+  } catch (error) {
+    console.error(`API call error for ${url}:`, error);
+    throw error;
+  }
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -23,9 +51,7 @@ export default function OnboardingPage() {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch('/api/page-config');
-      if (!res.ok) throw new Error('Failed to fetch config');
-      const data = await res.json();
+      const data = await safeApiCall('/api/page-config');
       setConfig(data);
     } catch (error) {
       console.error('Error fetching config:', error);
@@ -63,52 +89,112 @@ export default function OnboardingPage() {
   }, []);
 
   const handleStep1Submit = async (email: string, password: string) => {
-    const checkRes = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
-    const checkData = await checkRes.json();
-    
-    if (checkData.exists) {
-      setUserId(checkData.userId);
+    try {
+      const checkRes = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
       
-      // Fetch current config and user's profile data
-      await fetchConfig();
-      
-      // Get user's profile data to pre-populate form
-      const profileRes = await fetch('/api/profiles');
-      const profileData = await profileRes.json();
-      const userProfile = profileData.users?.find((u: any) => u.id === checkData.userId)?.user_profiles?.[0];
-      
-      if (userProfile) {
-        // Pre-populate form with existing data
-        setFormData({
-          about_me: userProfile.about_me || '',
-          street: userProfile.street || '',
-          city: userProfile.city || '',
-          state: userProfile.state || '',
-          zip: userProfile.zip || '',
-          birthdate: userProfile.birthdate || ''
-        });
-        
-        // Smart resume: find what step they should be on based on filled data
-        const smartStep = calculateSmartResumeStep(userProfile, config);
-        setStep(smartStep);
-      } else {
-        // No profile data, resume at saved step
-        setStep(checkData.currentStep);
+      if (!checkRes.ok) {
+        console.error('User check failed:', checkRes.status, checkRes.statusText);
+        throw new Error(`Failed to check user: ${checkRes.status}`);
       }
-      return;
+      
+      const checkText = await checkRes.text();
+      if (!checkText) {
+        throw new Error('Empty response from user check');
+      }
+      
+      let checkData;
+      try {
+        checkData = JSON.parse(checkText);
+      } catch (parseError) {
+        console.error('JSON parse error in user check:', parseError, 'Response:', checkText);
+        throw new Error('Invalid response from server');
+      }
+      
+      if (checkData.exists) {
+        setUserId(checkData.userId);
+        
+        // Fetch current config and user's profile data
+        await fetchConfig();
+        
+        // Get user's profile data to pre-populate form
+        const profileRes = await fetch('/api/profiles');
+        if (!profileRes.ok) {
+          console.error('Profile fetch failed:', profileRes.status);
+          setStep(checkData.currentStep);
+          return;
+        }
+        
+        const profileText = await profileRes.text();
+        if (!profileText) {
+          setStep(checkData.currentStep);
+          return;
+        }
+        
+        let profileData;
+        try {
+          profileData = JSON.parse(profileText);
+        } catch (parseError) {
+          console.error('Profile JSON parse error:', parseError);
+          setStep(checkData.currentStep);
+          return;
+        }
+        
+        const userProfile = profileData.users?.find((u: any) => u.id === checkData.userId)?.user_profiles?.[0];
+        
+        if (userProfile) {
+          // Pre-populate form with existing data
+          setFormData({
+            about_me: userProfile.about_me || '',
+            street: userProfile.street || '',
+            city: userProfile.city || '',
+            state: userProfile.state || '',
+            zip: userProfile.zip || '',
+            birthdate: userProfile.birthdate || ''
+          });
+          
+          // Smart resume: find what step they should be on based on filled data
+          const smartStep = calculateSmartResumeStep(userProfile, config);
+          setStep(smartStep);
+        } else {
+          // No profile data, resume at saved step
+          setStep(checkData.currentStep);
+        }
+        return;
+      }
+      
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!res.ok) {
+        console.error('User creation failed:', res.status, res.statusText);
+        throw new Error(`Failed to create user: ${res.status}`);
+      }
+      
+      const resText = await res.text();
+      if (!resText) {
+        throw new Error('Empty response from user creation');
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(resText);
+      } catch (parseError) {
+        console.error('User creation JSON parse error:', parseError, 'Response:', resText);
+        throw new Error('Invalid response from server');
+      }
+      
+      setUserId(data.userId);
+      
+      // Refetch config before moving to step 2
+      await fetchConfig();
+      setStep(2);
+    } catch (error) {
+      console.error('Step 1 submission error:', error);
+      alert('An error occurred. Please try again.');
     }
-    
-    const res = await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    setUserId(data.userId);
-    
-    // Refetch config before moving to step 2
-    await fetchConfig();
-    setStep(2);
   };
 
   const calculateSmartResumeStep = (userProfile: any, currentConfig: any) => {
