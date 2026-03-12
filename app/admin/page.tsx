@@ -30,6 +30,16 @@ export default function AdminPage() {
       return;
     }
 
+    // Check for duplicate components across pages
+    const duplicates = page2Components.filter(component => 
+      page3Components.includes(component)
+    );
+    
+    if (duplicates.length > 0) {
+      alert(`Error: The following components are selected for both pages: ${duplicates.join(', ')}. Each component can only be on one page.`);
+      return;
+    }
+
     try {
       console.log('Sending PUT request with:', { page2Components, page3Components });
       
@@ -77,13 +87,31 @@ export default function AdminPage() {
 
   const toggleComponent = (page: 'page2' | 'page3', component: string) => {
     if (page === 'page2') {
-      setPage2Components(prev =>
-        prev.includes(component) ? prev.filter(c => c !== component) : [...prev, component]
-      );
+      setPage2Components(prev => {
+        const newComponents = prev.includes(component) 
+          ? prev.filter(c => c !== component) 
+          : [...prev, component];
+        
+        // If adding to page2, remove from page3 to prevent duplicates
+        if (!prev.includes(component)) {
+          setPage3Components(prevPage3 => prevPage3.filter(c => c !== component));
+        }
+        
+        return newComponents;
+      });
     } else {
-      setPage3Components(prev =>
-        prev.includes(component) ? prev.filter(c => c !== component) : [...prev, component]
-      );
+      setPage3Components(prev => {
+        const newComponents = prev.includes(component) 
+          ? prev.filter(c => c !== component) 
+          : [...prev, component];
+        
+        // If adding to page3, remove from page2 to prevent duplicates
+        if (!prev.includes(component)) {
+          setPage2Components(prevPage2 => prevPage2.filter(c => c !== component));
+        }
+        
+        return newComponents;
+      });
     }
   };
 
@@ -99,7 +127,14 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow p-8">
-        <h1 className="text-3xl font-bold mb-8">Admin Configuration</h1>
+        <h1 className="text-3xl font-bold mb-4">Admin Configuration</h1>
+        
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-blue-800 text-sm">
+            <strong>Note:</strong> Each component can only be assigned to one page. 
+            Selecting a component for one page will automatically remove it from the other page.
+          </p>
+        </div>
         
         <div className="grid md:grid-cols-2 gap-8 mb-8">
           <div>

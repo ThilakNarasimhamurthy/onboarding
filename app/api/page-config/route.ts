@@ -47,6 +47,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Each page must have at least one component' }, { status: 400 });
     }
     
+    // Check for duplicate components across pages
+    const duplicates = page2Components.filter((component: string) => 
+      page3Components.includes(component)
+    );
+    
+    if (duplicates.length > 0) {
+      return NextResponse.json({ 
+        error: `Duplicate components found: ${duplicates.join(', ')}. Each component can only be assigned to one page.` 
+      }, { status: 400 });
+    }
+    
     console.log('Deleting existing config...');
     // Delete ALL existing config first
     const { error: deleteError } = await supabase
