@@ -31,18 +31,38 @@ export default function AdminPage() {
     }
 
     try {
+      console.log('Sending PUT request with:', { page2Components, page3Components });
+      
       const res = await fetch('/api/page-config', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({ page2Components, page3Components })
       });
 
-      const data = await res.json();
-      
+      console.log('Response status:', res.status);
+      console.log('Response headers:', Object.fromEntries(res.headers.entries()));
+
       if (!res.ok) {
-        alert(`Error: ${data.error || 'Failed to save configuration'}`);
+        const errorText = await res.text();
+        console.error('Error response:', errorText);
+        
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || 'Failed to save configuration';
+        } catch {
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+        }
+        
+        alert(`Error: ${errorMessage}`);
         return;
       }
+
+      const data = await res.json();
+      console.log('Success response:', data);
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -50,7 +70,8 @@ export default function AdminPage() {
       // Refetch the config to show the updated state
       await fetchConfig();
     } catch (error) {
-      alert(`Error: ${error}`);
+      console.error('Network error:', error);
+      alert(`Network Error: ${error}`);
     }
   };
 
