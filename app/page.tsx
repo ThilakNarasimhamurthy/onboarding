@@ -151,14 +151,14 @@ export default function OnboardingPage() {
             zip: userProfile.zip || '',
             birthdate: userProfile.birthdate || ''
           });
-          
-          // Smart resume: find what step they should be on based on filled data
-          const smartStep = calculateSmartResumeStep(userProfile, config);
-          setStep(smartStep);
-        } else {
-          // No profile data, resume at saved step
-          setStep(checkData.currentStep);
         }
+        
+        // Always use smart resume logic when user returns, regardless of profile data
+        // This ensures we respect current admin configuration
+        const userProfileData = userProfile || {};
+        const smartStep = calculateSmartResumeStep(userProfileData, config);
+        console.log('User returning, using smart resume. Smart step:', smartStep, 'Saved step:', checkData.currentStep);
+        setStep(smartStep);
         return;
       }
       
@@ -198,48 +198,85 @@ export default function OnboardingPage() {
   };
 
   const calculateSmartResumeStep = (userProfile: any, currentConfig: any) => {
-    if (!currentConfig) return 2;
+    if (!currentConfig) {
+      console.log('No config available, defaulting to step 2');
+      return 2;
+    }
     
     // Check what data user has
     const hasAboutMe = userProfile.about_me && userProfile.about_me.trim() !== '';
     const hasAddress = userProfile.street && userProfile.city && userProfile.state && userProfile.zip;
     const hasBirthdate = userProfile.birthdate;
     
-    // If user has completed everything, show completion
-    if (hasAboutMe && hasAddress && hasBirthdate) {
-      return 4; // Completed
-    }
-    
-    // Check what's missing based on current config
     const page2Components = currentConfig.page2_components || [];
     const page3Components = currentConfig.page3_components || [];
     
-    // Check if user needs to fill anything on page 2
-    const needsPage2 = page2Components.some((component: string) => {
-      if (component === 'about_me') return !hasAboutMe;
-      if (component === 'address') return !hasAddress;
-      if (component === 'birthdate') return !hasBirthdate;
+    // If no components configured, default to step 2
+    if (page2Components.length === 0 && page3Components.length === 0) {
+      console.log('No components configured, defaulting to step 2');
+      return 2;
+    }
+    
+    console.log('Smart Resume Debug:', {
+      userProfile,
+      currentConfig,
+      hasAboutMe,
+      hasAddress,
+      hasBirthdate,
+      page2Components,
+      page3Components
+    });
+    
+    // Check if ALL components on page 2 are completed
+    const page2Complete = page2Components.length > 0 && page2Components.every((component: string) => {
+      if (component === 'about_me') return hasAboutMe;
+      if (component === 'address') return hasAddress;
+      if (component === 'birthdate') return hasBirthdate;
       return false;
     });
     
-    if (needsPage2) {
-      return 2; // Still needs page 2 components
-    }
-    
-    // Check if user needs to fill anything on page 3
-    const needsPage3 = page3Components.some((component: string) => {
-      if (component === 'about_me') return !hasAboutMe;
-      if (component === 'address') return !hasAddress;
-      if (component === 'birthdate') return !hasBirthdate;
+    // Check if ALL components on page 3 are completed
+    const page3Complete = page3Components.length > 0 && page3Components.every((component: string) => {
+      if (component === 'about_me') return hasAboutMe;
+      if (component === 'address') return hasAddress;
+      if (component === 'birthdate') return hasBirthdate;
       return false;
     });
     
-    if (needsPage3) {
-      return 3; // Needs page 3 components
+    console.log('Page completion status:', {
+      page2Complete,
+      page3Complete,
+      page2ComponentsLength: page2Components.length,
+      page3ComponentsLength: page3Components.length
+    });
+    
+    // If both pages are complete, show completion
+    if (page2Complete && page3Complete) {
+      console.log('Both pages complete, going to step 4');
+      return 4; // Completed
     }
     
-    // Everything is filled, show completion
-    return 4;
+    // If page 2 has components and is not complete, go to page 2
+    if (page2Components.length > 0 && !page2Complete) {
+      console.log('Page 2 has components and is not complete, going to step 2');
+      return 2;
+    }
+    
+    // If page 2 is complete (or has no components) but page 3 is not complete, go to page 3
+    if ((page2Complete || page2Components.length === 0) && page3Components.length > 0 && !page3Complete) {
+      console.log('Page 2 complete (or empty), page 3 not complete, going to step 3');
+      return 3;
+    }
+    
+    // If page 2 is complete and page 3 has no components, show completion
+    if (page2Complete && page3Components.length === 0) {
+      console.log('Page 2 complete and page 3 empty, going to step 4');
+      return 4;
+    }
+    
+    // Fallback to step 2
+    console.log('Fallback to step 2');
+    return 2;
   };
 
   const handleStep2Submit = async () => {
