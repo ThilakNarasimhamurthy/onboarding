@@ -13,24 +13,20 @@ const safeApiCall = async (url: string, options?: RequestInit) => {
     const response = await fetch(url, options);
     
     if (!response.ok) {
-      console.error(`API call failed: ${response.status} ${response.statusText}`);
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
     const text = await response.text();
     if (!text) {
-      console.error(`Empty response from ${url}`);
       throw new Error('Empty response from server');
     }
     
     try {
       return JSON.parse(text);
     } catch (parseError) {
-      console.error(`JSON parse error for ${url}:`, parseError, 'Response:', text);
       throw new Error('Invalid JSON response from server');
     }
   } catch (error) {
-    console.error(`API call error for ${url}:`, error);
     throw error;
   }
 };
@@ -54,7 +50,6 @@ export default function OnboardingPage() {
       const data = await safeApiCall('/api/page-config');
       setConfig(data);
     } catch (error) {
-      console.error('Error fetching config:', error);
       // Set default config if fetch fails
       setConfig({
         page2_components: ['about_me'],
@@ -93,7 +88,6 @@ export default function OnboardingPage() {
       const checkRes = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
       
       if (!checkRes.ok) {
-        console.error('User check failed:', checkRes.status, checkRes.statusText);
         throw new Error(`Failed to check user: ${checkRes.status}`);
       }
       
@@ -106,7 +100,6 @@ export default function OnboardingPage() {
       try {
         checkData = JSON.parse(checkText);
       } catch (parseError) {
-        console.error('JSON parse error in user check:', parseError, 'Response:', checkText);
         throw new Error('Invalid response from server');
       }
       
@@ -119,7 +112,6 @@ export default function OnboardingPage() {
         // Get user's profile data to pre-populate form
         const profileRes = await fetch('/api/profiles');
         if (!profileRes.ok) {
-          console.error('Profile fetch failed:', profileRes.status);
           setStep(checkData.currentStep);
           return;
         }
@@ -134,7 +126,6 @@ export default function OnboardingPage() {
         try {
           profileData = JSON.parse(profileText);
         } catch (parseError) {
-          console.error('Profile JSON parse error:', parseError);
           setStep(checkData.currentStep);
           return;
         }
@@ -157,7 +148,6 @@ export default function OnboardingPage() {
         // This ensures we respect current admin configuration
         const userProfileData = userProfile || {};
         const smartStep = calculateSmartResumeStep(userProfileData, config);
-        console.log('User returning, using smart resume. Smart step:', smartStep, 'Saved step:', checkData.currentStep);
         setStep(smartStep);
         return;
       }
@@ -169,7 +159,6 @@ export default function OnboardingPage() {
       });
       
       if (!res.ok) {
-        console.error('User creation failed:', res.status, res.statusText);
         throw new Error(`Failed to create user: ${res.status}`);
       }
       
@@ -182,7 +171,6 @@ export default function OnboardingPage() {
       try {
         data = JSON.parse(resText);
       } catch (parseError) {
-        console.error('User creation JSON parse error:', parseError, 'Response:', resText);
         throw new Error('Invalid response from server');
       }
       
@@ -192,14 +180,12 @@ export default function OnboardingPage() {
       await fetchConfig();
       setStep(2);
     } catch (error) {
-      console.error('Step 1 submission error:', error);
       alert('An error occurred. Please try again.');
     }
   };
 
   const calculateSmartResumeStep = (userProfile: any, currentConfig: any) => {
     if (!currentConfig) {
-      console.log('No config available, defaulting to step 2');
       return 2;
     }
     
@@ -213,19 +199,8 @@ export default function OnboardingPage() {
     
     // If no components configured, default to step 2
     if (page2Components.length === 0 && page3Components.length === 0) {
-      console.log('No components configured, defaulting to step 2');
       return 2;
     }
-    
-    console.log('Smart Resume Debug:', {
-      userProfile,
-      currentConfig,
-      hasAboutMe,
-      hasAddress,
-      hasBirthdate,
-      page2Components,
-      page3Components
-    });
     
     // Check if ALL components on page 2 are completed
     const page2Complete = page2Components.length > 0 && page2Components.every((component: string) => {
@@ -243,39 +218,27 @@ export default function OnboardingPage() {
       return false;
     });
     
-    console.log('Page completion status:', {
-      page2Complete,
-      page3Complete,
-      page2ComponentsLength: page2Components.length,
-      page3ComponentsLength: page3Components.length
-    });
-    
     // If both pages are complete, show completion
     if (page2Complete && page3Complete) {
-      console.log('Both pages complete, going to step 4');
       return 4; // Completed
     }
     
     // If page 2 has components and is not complete, go to page 2
     if (page2Components.length > 0 && !page2Complete) {
-      console.log('Page 2 has components and is not complete, going to step 2');
       return 2;
     }
     
     // If page 2 is complete (or has no components) but page 3 is not complete, go to page 3
     if ((page2Complete || page2Components.length === 0) && page3Components.length > 0 && !page3Complete) {
-      console.log('Page 2 complete (or empty), page 3 not complete, going to step 3');
       return 3;
     }
     
     // If page 2 is complete and page 3 has no components, show completion
     if (page2Complete && page3Components.length === 0) {
-      console.log('Page 2 complete and page 3 empty, going to step 4');
       return 4;
     }
     
     // Fallback to step 2
-    console.log('Fallback to step 2');
     return 2;
   };
 

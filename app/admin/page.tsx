@@ -16,7 +16,7 @@ export default function AdminPage() {
       setPage2Components(data.page2_components || []);
       setPage3Components(data.page3_components || []);
     } catch (error) {
-      console.error('Error fetching config:', error);
+      // Handle error silently
     }
   };
 
@@ -41,8 +41,6 @@ export default function AdminPage() {
     }
 
     try {
-      console.log('Sending PUT request with:', { page2Components, page3Components });
-      
       const res = await fetch('/api/page-config', {
         method: 'PUT',
         headers: { 
@@ -52,12 +50,8 @@ export default function AdminPage() {
         body: JSON.stringify({ page2Components, page3Components })
       });
 
-      console.log('Response status:', res.status);
-      console.log('Response headers:', Object.fromEntries(res.headers.entries()));
-
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('Error response:', errorText);
         
         let errorMessage;
         try {
@@ -72,7 +66,6 @@ export default function AdminPage() {
       }
 
       const data = await res.json();
-      console.log('Success response:', data);
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -80,7 +73,6 @@ export default function AdminPage() {
       // Refetch the config to show the updated state
       await fetchConfig();
     } catch (error) {
-      console.error('Network error:', error);
       alert(`Network Error: ${error}`);
     }
   };
